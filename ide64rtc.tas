@@ -1,0 +1,166 @@
+;
+; IDE64RTC - GEOS time and date setup (auto-exec)
+;
+; Maciej 'YTM/Elysium' Witkowiak <ytm@elysium.pl>
+; 24.07.2002
+;
+
+IDE64_CLOCKPORT		= $de5f
+IDE64_CLOCKRESET	= $defb
+
+		; program entry
+		jsr InitForIO
+		php
+		sei
+		; check if IDE64 is there
+		+CmpB $de60, $de60
+		bne noide64
+		cmp #$49			; "I"
+		bne noide64
+		+CmpB $de61, $de61
+		bne noide64
+		cmp #$44			; "D"
+		bne noide64
+		+CmpB $de62, $de62
+		bne noide64
+		cmp #$45			; "E"
+		bne noide64
+		; fetch the time
+		jsr update_date
+		; setup CIA#1 TOD
+		lda mhour
+		cmp #$13		; AM/PM stuff
+		bcc .am
+		sbc #$12
+		ora #$80
+.am		sta cia1base+11
+		+MoveB mminute, cia1base+10
+		+MoveB msecond, cia1base+9
+		+LoadB cia1base+8, 0
+		; convert from BCD and setup local time
+		lda msecond
+		jsr fromBCD
+		sta seconds
+		lda mminute
+		jsr fromBCD
+		sta minutes
+		lda mhour
+		jsr fromBCD
+		sta hour
+		lda mday
+		jsr fromBCD
+		sta day
+		lda mmonth
+		jsr fromBCD
+		sta month
+		lda myear
+		jsr fromBCD
+		sta year
+noide64		plp
+		jsr DoneWithIO
+		jmp EnterDeskTop
+
+;------------------------------------------
+; In BCD format
+;
+;    0   1   2    3    4   5        6
+;  SEC MIN HOUR DAY MONTH WEEKDAY YEAR (00-99)
+;------------------------------------------
+
+write_byte	sta IDE64_CLOCKPORT ; bit 0
+		lsr
+		sta IDE64_CLOCKPORT ; bit 1
+		lsr
+		sta IDE64_CLOCKPORT ; bit 2
+		lsr
+		sta IDE64_CLOCKPORT ; bit 3
+		lsr
+		sta IDE64_CLOCKPORT ; bit 4
+		lsr
+		sta IDE64_CLOCKPORT ; bit 5
+		lsr
+		sta IDE64_CLOCKPORT ; bit 6
+		lsr
+		sta IDE64_CLOCKPORT ; bit 7
+		rts
+
+read_byte
+		+LoadB r0L, 0
+		lda IDE64_CLOCKPORT  ; bit 0
+		lsr
+		ror r0L
+		lda IDE64_CLOCKPORT  ; bit 1
+		lsr
+		ror r0L
+		lda IDE64_CLOCKPORT  ; bit 2
+		lsr
+		ror r0L
+		lda IDE64_CLOCKPORT  ; bit 3
+		lsr
+		ror r0L
+		lda IDE64_CLOCKPORT  ; bit 4
+		lsr
+		ror r0L
+		lda IDE64_CLOCKPORT  ; bit 5
+		lsr
+		ror r0L
+		lda IDE64_CLOCKPORT  ; bit 6
+		lsr
+		ror r0L
+		lda IDE64_CLOCKPORT  ; bit 7
+		lsr
+		ror r0L
+		lda r0L
+		rts
+
+		;; update_date
+		;; read time and date (in BCD) from IDE64 RTC to msecond-myear
+		;; at this point irq must be disabled
+update_date:
+		+LoadB IDE64_CLOCKRESET, 2	;enable clock chip
+		lda #%10111111			;clock burst read command
+		jsr write_byte
+		jsr read_byte
+		sta msecond
+		jsr read_byte
+		sta mminute
+		jsr read_byte
+		sta mhour
+		jsr read_byte
+		sta mday
+		jsr read_byte
+		sta mmonth
+		jsr read_byte
+		sta mweekday
+		jsr read_byte
+		sta myear
+		+LoadB IDE64_CLOCKRESET, 0	;disable clock chip
+		rts
+
+; convert BCD in A, output in A
+fromBCD:
+		php
+		cld
+		sei
+		pha
+		and #$0f
+		sta r0L
+		pla
+		and #$f0
+		lsr
+		sta r0H
+		lsr
+		lsr
+		adc r0L
+		adc r0H
+		plp
+		rts
+
+;------------------------------
+msecond		!byte 0
+mminute		!byte 0
+mhour		!byte 0
+mweekday	!byte 0
+mday		!byte 0
+mmonth		!byte 0
+myear		!byte 0
