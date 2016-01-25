@@ -16,6 +16,8 @@ run whenever you need.
 
 Although I provide an assembled binary in bin/ directory, you may
 want to rebuild it. You need ACME, a free, open source crossassembler.
+http://sourceforge.net/projects/acme-crossass/
+
 Then simply type 'make' and after a while there will be new binary ready
 for use.
 
